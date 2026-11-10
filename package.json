@@ -1,0 +1,26 @@
+{
+  "name": "medisync-monorepo",
+  "version": "1.0.0",
+  "description": "MediSync — Sistema Integral de Administración de Medicamentos con Sincronización Móvil y Smartwatch",
+  "scripts": {
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:mobile": "npm --prefix mobile start",
+    "test:backend": "npm --prefix backend test",
+    "build:backend": "npm --prefix backend run build",
+    "seed": "npm --prefix backend run prisma:seed",
+    "typecheck": "npm --prefix mobile run build && npm --prefix backend run build"
+  },
+  "keywords": [
+    "medisync",
+    "react-native",
+    "wearos",
+    "smartwatch",
+    "healthcare",
+    "express",
+    "prisma",
+    "typescript"
+  ],
+  "author": "Desarrollador Individual - MediSync",
+  "license": "MIT"
+}
+

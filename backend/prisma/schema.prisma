@@ -1,0 +1,179 @@
+// MediSync Prisma Database Schema
+// Soporta SQLite de forma inmediata sin dependencias externas,
+// y es 100% compatible con PostgreSQL.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String    @id @default(uuid())
+  email            String    @unique
+  passwordHash     String
+  fullName         String
+  phone            String?
+  dateOfBirth      DateTime?
+  emergencyContact String?
+  timezone         String    @default("America/Mexico_City")
+  role             String    @default("PATIENT") // PATIENT, CAREGIVER, ADMIN
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  medications                 Medication[]
+  scheduledDoses              ScheduledDose[]
+  doseEvents                  DoseEvent[]
+  devices                     Device[]
+  sentInvitations             CaregiverInvitation[] @relation("SentInvitations")
+  caregiverRelationsAsPatient CaregiverRelationship[] @relation("PatientRelation")
+  caregiverRelationsAsCaregiver CaregiverRelationship[] @relation("CaregiverRelation")
+  notificationLogs            NotificationLog[]
+}
+
+model Medication {
+  id           String    @id @default(uuid())
+  userId       String
+  name         String
+  description  String?
+  dosage       String
+  unit         String    // mg, ml, tabletas, gotas, etc.
+  frequency    String    // CADA_8_HORAS, DIARIO, PERSONALIZADO
+  instructions String?
+  startDate    DateTime  @default(now())
+  endDate      DateTime?
+  imageUrl     String?
+  color        String?   @default("#1E88E5")
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  schedules      MedicationSchedule[]
+  scheduledDoses ScheduledDose[]
+
+  @@index([userId])
+}
+
+model MedicationSchedule {
+  id                    String   @id @default(uuid())
+  medicationId          String
+  timeOfDay             String   // formato "HH:mm" (ej. "08:00")
+  daysOfWeek            String   @default("1,2,3,4,5,6,7") // 1=Lunes a 7=Domingo
+  remindersEnabled      Boolean  @default(true)
+  snoozeIntervalMinutes Int      @default(10)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  medication     Medication      @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+  scheduledDoses ScheduledDose[]
+
+  @@index([medicationId])
+}
+
+model ScheduledDose {
+  id            String    @id @default(uuid())
+  userId        String
+  medicationId  String
+  scheduleId    String?
+  scheduledTime DateTime
+  status        String    @default("PENDING") // PENDING, CONFIRMED, SNOOZED, LATE, SKIPPED
+  snoozedUntil  DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user       User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  medication Medication          @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+  schedule   MedicationSchedule? @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+  doseEvents DoseEvent[]
+
+  @@index([userId, scheduledTime])
+  @@index([status])
+}
+
+model DoseEvent {
+  id              String   @id // Generado por cliente o UUID único para idempotencia
+  scheduledDoseId String
+  userId          String
+  eventType       String   // CONFIRMED, SNOOZED, SKIPPED
+  confirmedAt     DateTime @default(now())
+  deviceSource    String   @default("PHONE") // PHONE, SMARTWATCH_WEAROS, SMARTWATCH_SIMULATOR, WEB
+  notes           String?
+  syncStatus      String   @default("SYNCED") // SYNCED, PENDING
+  createdAt       DateTime @default(now())
+
+  scheduledDose ScheduledDose @relation(fields: [scheduledDoseId], references: [id], onDelete: Cascade)
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([scheduledDoseId])
+  @@index([userId])
+}
+
+model CaregiverInvitation {
+  id           String   @id @default(uuid())
+  patientId    String
+  inviteeEmail String
+  inviteCode   String   @unique
+  status       String   @default("PENDING") // PENDING, ACCEPTED, REJECTED, EXPIRED
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  patient User @relation("SentInvitations", fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([inviteCode])
+  @@index([inviteeEmail])
+}
+
+model CaregiverRelationship {
+  id                 String   @id @default(uuid())
+  patientId          String
+  caregiverId        String
+  permissions        String   @default("VIEW_MEDICATIONS,VIEW_DOSES,RECEIVE_ALERTS")
+  isActive           Boolean  @default(true)
+  alertDelayMinutes  Int      @default(30)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  patient   User @relation("PatientRelation", fields: [patientId], references: [id], onDelete: Cascade)
+  caregiver User @relation("CaregiverRelation", fields: [caregiverId], references: [id], onDelete: Cascade)
+
+  @@unique([patientId, caregiverId])
+}
+
+model Device {
+  id               String    @id @default(uuid())
+  userId           String
+  deviceType       String    // PHONE, SMARTWATCH_WEAROS, SMARTWATCH_SIMULATOR
+  deviceName       String
+  deviceIdentifier String
+  batteryLevel     Int?
+  lastSyncAt       DateTime?
+  isConnected      Boolean   @default(false)
+  fcmToken         String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deviceIdentifier])
+}
+
+model NotificationLog {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  body      String
+  payload   String?
+  channel   String   // LOCAL_NOTIFICATION, WEAROS_MESSAGE, CAREGIVER_ALERT
+  sentAt    DateTime @default(now())
+  isRead    Boolean  @default(false)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, sentAt])
+}
+
