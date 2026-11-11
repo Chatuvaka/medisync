@@ -44,11 +44,17 @@ class ApiClient {
 
     const url = `${this.baseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
     try {
       const response = await fetch(url, {
         ...options,
         headers,
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       const data = await response.json();
 
@@ -59,6 +65,17 @@ class ApiClient {
 
       return data;
     } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        const timeoutMsg = `Tiempo de espera agotado al conectar con el servidor (${url}). Verifica que el backend esté ejecutándose en la misma red Wi-Fi.`;
+        console.error(`[API Timeout] ${options.method || 'GET'} ${url}`);
+        throw new Error(timeoutMsg);
+      }
+      if (error.message?.includes('Network request failed')) {
+        const netMsg = `No se pudo conectar al servidor en ${url}. Asegúrate de que el backend esté activo y el celular en la misma red Wi-Fi.`;
+        console.error(`[API Network Failed] ${options.method || 'GET'} ${url}`);
+        throw new Error(netMsg);
+      }
       console.error(`[API Error] ${options.method || 'GET'} ${url}:`, error.message);
       throw error;
     }
