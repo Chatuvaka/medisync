@@ -42,7 +42,7 @@ const getHostIp = (): string | null => {
 const detectedHost = getHostIp();
 
 // IP fija de la máquina anfitriona en la red Wi-Fi actual
-export const MACHINE_LAN_IP = '10.222.1.33';
+export const MACHINE_LAN_IP = '192.168.1.83';
 
 // URL base inteligente:
 export const DEFAULT_API_URL = Platform.select({
